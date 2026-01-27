@@ -563,8 +563,8 @@ def main():
     p.add_argument("--dp_cache", type=str, required=True)
     p.add_argument("--dp_abits_set", type=str, default="2468")
     p.add_argument("--dp_baseline_abits", type=int, default=8)
-    p.add_argument("--dp_avg_abits", type=float, default=6.0)
-    p.add_argument("--dp_pair_beta", type=float, default=1.0)
+    p.add_argument("--dp_avg_abits", type=float, default=4.0)
+    p.add_argument("--dp_pair_beta", type=float, default=0.5)
 
     p.add_argument("--save_quant_model", type=str, default=None)
     p.add_argument("--load_quant_model", type=str, default=None)
