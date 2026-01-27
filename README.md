@@ -15,7 +15,7 @@ pip install -r requirements.txt
 ### KOTMS
 ```bash
     python scripts/KOTMS.py \
-    --model /data01/home/zhixiong.zhao/models/models/datasets/Qwen3-8B \
+    --model Qwen/Qwen3-8B \
     --export_rotated checkpoints/qwen3_8b_rotated.pt \
     --ngpus 4 \
     --use_gmm \
@@ -26,7 +26,7 @@ pip install -r requirements.txt
 ### ILA-AMP
 ```bash
     python scripts/ILA_AMP.py \
-    --model /data01/home/zhixiong.zhao/models/models/datasets/Qwen3-8B \
+    --model Qwen/Qwen3-8B \
     --import_rotated checkpoints/qwen3_8b_rotated.pt \
     --dp_cache dp_cache/qwen3_8b \
     --dp_ngpus 4
@@ -35,20 +35,20 @@ pip install -r requirements.txt
 #### Weight-only (W1.58A16)
 ```bash
     python run_twla.py \
-    --model /data01/home/zhixiong.zhao/models/models/datasets/Qwen3-8B \
+    --model Qwen/Qwen3-8B \
     --import_rotated checkpoints/qwen3_8b_rotated.pt \
     --dp_cache dp_cache/qwen3_8b \
-    --save_quant_model /data01/home/zhixiong.zhao/TWLA/checkpoints \
+    --save_quant_model save_models/Qwen3-8B \
     --eval_qa \
     --abits 16
 ```
 #### Weight-Activateion (W1.58A4)
 ```bash
     python run_twla.py \
-    --model /data01/home/zhixiong.zhao/models/models/datasets/Qwen3-8B \
+    --model Qwen/Qwen3-8B \
     --import_rotated checkpoints/qwen3_8b_rotated.pt \
     --dp_cache dp_cache/qwen3_8b \
-    --load_quant_model /data01/home/zhixiong.zhao/TWLA/checkpoints.tmp \
+    --load_quant_model save_models/Qwen3-8B \
     --eval_qa \
     --dp_avg_abits 4
 ```
