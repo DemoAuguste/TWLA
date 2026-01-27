@@ -42,7 +42,7 @@ pip install -r requirements.txt
     --eval_qa \
     --abits 16
 ```
-#### Weight-Activateion (W1.58A4)
+#### Weight-Activation (W1.58A4)
 ```bash
     python run_twla.py \
     --model Qwen/Qwen3-8B \
