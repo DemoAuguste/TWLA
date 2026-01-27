@@ -8,15 +8,56 @@ import argparse
 import random
 import numpy as np
 import torch
+import copy
 import torch.nn as nn
 import torch.multiprocessing as mp
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM
+import torch.nn.functional as F
 
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 sys.path.append(parent_dir)
 
 from datautils import get_loaders
+
+from quantize.quantizer import UniformAffineQuantizer
+
+class QLinear(nn.Linear):
+    @torch.no_grad()
+    def init_act_quant(self, args) -> None:
+        if int(getattr(args, "abits", 16)) >= 16:
+            self.act_quant = None
+            return
+        lac = float(getattr(self, "act_lac", float(getattr(args, "lac", 0.9))))
+        self.act_quant = UniformAffineQuantizer(
+            n_bits=int(args.abits),
+            symmetric=False,
+            per_channel_axes=[],
+            dynamic=True,
+            dynamic_method=str(getattr(args, "a_dynamic_method", "per_token")),
+            act_group_size=getattr(args, "act_group_size", None),
+            lac=lac,
+        ).to(self.weight.device)
+        self.act_quant.enable = True
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        init_shape = x.shape
+
+        if hasattr(self, "L") and self.L is not None and hasattr(self, "R") and self.R is not None:
+            device = x.device
+            L = self.L.to(device) if self.L.device != device else self.L
+            R = self.R.to(device) if self.R.device != device else self.R
+
+            x = x.reshape(-1, int(self.dim_l), int(self.dim_r))
+            x = L @ x @ R
+            x = x.reshape(init_shape)
+
+        # activation quant
+        if getattr(self, "act_quant", None) is not None:
+            x = self.act_quant(x)
+
+        return F.linear(x, self.weight, self.bias)
+
 
 
 def make_deterministic(seed: int) -> None:
@@ -96,7 +137,7 @@ def _set_or_register_buffer(module: nn.Module, name: str, value: torch.Tensor) -
     module.register_buffer(name, value, persistent=True)
 
 
-def export_import_rotated(model, import_rotated: str) -> int:
+def export_import_rotated(model, import_rotated: str, args) -> int:
     pkg = torch.load(import_rotated, map_location="cpu")
     layers_pkg = pkg["layers"]
     filled = 0
@@ -110,17 +151,18 @@ def export_import_rotated(model, import_rotated: str) -> int:
             continue
 
         d = layers_pkg[name]
-        layer.weight.data = d["weight"].to(dtype=torch.float16)
 
+        layer.weight.data = d["weight"].to(dtype=torch.float16)
         if d["bias"] is not None:
             if layer.bias is None:
                 layer.bias = nn.Parameter(d["bias"].to(dtype=torch.float16))
             else:
                 layer.bias.data = d["bias"].to(dtype=torch.float16)
 
+        layer.__class__ = QLinear
+
         L = d.get("L", None)
         R = d.get("R", None)
-
         if L is not None:
             _set_or_register_buffer(layer, "L", L.to(dtype=torch.float16).contiguous())
         else:
@@ -135,19 +177,22 @@ def export_import_rotated(model, import_rotated: str) -> int:
             layer.dim_l = int(d.get("dim_l", 0) or 0)
             layer.dim_r = int(d.get("dim_r", 0) or 0)
 
+        layer.init_act_quant(args)
+
         filled += 1
+
 
     return filled
 
 
-def set_block_abits(model, block_idx: int, abits: int):
+def set_block_abits(model, args, block_idx: int, abits: int):
     abits = int(abits)
+    a2 = copy.copy(args)
+    a2.abits = abits
     block = model.model.layers[int(block_idx)]
     for m in block.modules():
-        if isinstance(m, nn.Linear):
-            if not hasattr(m, "_abits"):
-                m._abits = 16
-            m._abits = abits
+        if isinstance(m, QLinear):
+            m.init_act_quant(a2)
 
 
 @torch.no_grad()
@@ -249,7 +294,7 @@ def _dp_worker(task_queue, result_queue, stop_event, gpu_id: int, args, dataset:
 
     model = AutoModelForCausalLM.from_pretrained(args.model, device_map="cpu", torch_dtype="auto")
     model.seqlen = int(args.seqlen)
-    _ = export_import_rotated(model, args.import_rotated)
+    _ = export_import_rotated(model, args.import_rotated, args)
     model.half()
     model.eval()
 
@@ -257,7 +302,7 @@ def _dp_worker(task_queue, result_queue, stop_event, gpu_id: int, args, dataset:
     L = len(model.model.layers)
 
     for i in range(L):
-        set_block_abits(model, i, baseline_abits)
+        set_block_abits(model, args, i, baseline_abits)
 
     while not stop_event.is_set():
         try:
@@ -273,11 +318,11 @@ def _dp_worker(task_queue, result_queue, stop_event, gpu_id: int, args, dataset:
                 _, blk_i, ab = task
                 blk_i = int(blk_i)
                 ab = int(ab)
-                set_block_abits(model, blk_i, baseline_abits)
-                set_block_abits(model, blk_i, ab)
+                set_block_abits(model, args, blk_i, baseline_abits)
+                set_block_abits(model, args, blk_i, ab)
                 nll = llama_eval_return_nll(model, testloader, device)
                 result_queue.put(("single", blk_i, ab, float(nll)))
-                set_block_abits(model, blk_i, baseline_abits)
+                set_block_abits(model, args, blk_i, baseline_abits)
 
             elif kind == "pair":
                 _, i, bp, b = task
@@ -287,16 +332,16 @@ def _dp_worker(task_queue, result_queue, stop_event, gpu_id: int, args, dataset:
                 if not (1 <= i < L):
                     raise ValueError(f"pair index out of range: i={i}, L={L}")
 
-                set_block_abits(model, i - 1, baseline_abits)
-                set_block_abits(model, i, baseline_abits)
-                set_block_abits(model, i - 1, bp)
-                set_block_abits(model, i, b)
+                set_block_abits(model, args, i - 1, baseline_abits)
+                set_block_abits(model, args, i, baseline_abits)
+                set_block_abits(model, args, i - 1, bp)
+                set_block_abits(model, args, i, b)
 
                 nll = llama_eval_return_nll(model, testloader, device)
                 result_queue.put(("pair", i, bp, b, float(nll)))
 
-                set_block_abits(model, i - 1, baseline_abits)
-                set_block_abits(model, i, baseline_abits)
+                set_block_abits(model, args, i - 1, baseline_abits)
+                set_block_abits(model, args, i, baseline_abits)
 
             else:
                 raise ValueError(f"unknown task kind: {kind}")
@@ -325,6 +370,12 @@ def main():
     p.add_argument("--dataset", type=str, default="wikitext2")
     p.add_argument("--seqlen", type=int, default=2048)
     p.add_argument("--seed", type=int, default=0)
+
+    p.add_argument("--abits", type=int, default=8)  
+    p.add_argument("--lac", type=float, default=0.9)
+    p.add_argument("--a_dynamic_method", type=str, default="per_token", choices=["per_token"])
+    p.add_argument("--act_group_size", type=int, default=None)
+
 
     p.add_argument("--dp_abits_set", type=str, default="2468")
     p.add_argument("--dp_baseline_abits", type=int, default=8)
@@ -368,14 +419,14 @@ def main():
         dev = "cuda:0"
         model0 = AutoModelForCausalLM.from_pretrained(args.model, device_map="cpu", torch_dtype="auto")
         model0.seqlen = int(args.seqlen)
-        _ = export_import_rotated(model0, args.import_rotated)
+        _ = export_import_rotated(model0, args.import_rotated, args)
         model0.half()
         model0.eval()
         _, testloader0 = get_loaders(args.dataset, seed=int(args.seed), seqlen=int(args.seqlen), model=args.model)
 
         Ltmp = len(model0.model.layers)
         for i in range(Ltmp):
-            set_block_abits(model0, i, baseline_abits)
+            set_block_abits(model0, args, i, baseline_abits)
 
         base_nll = llama_eval_return_nll(model0, testloader0, dev)
         atomic_torch_save({"base_nll": float(base_nll), "baseline_abits": int(baseline_abits)}, base_path)
@@ -388,7 +439,7 @@ def main():
 
     model_tmp = AutoModelForCausalLM.from_pretrained(args.model, device_map="cpu", torch_dtype="auto")
     model_tmp.seqlen = int(args.seqlen)
-    _ = export_import_rotated(model_tmp, args.import_rotated)
+    _ = export_import_rotated(model_tmp, args.import_rotated, args)
     L = len(model_tmp.model.layers)
     del model_tmp
     torch.cuda.empty_cache()
