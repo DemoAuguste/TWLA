@@ -102,7 +102,7 @@ We use [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harne
 
 ## 🔎 Results
 <details>
-<summary>MoBiE achieves superior perplexity performance on WikiText2 datasets and superior average accuracy on 7 zero-shot QA datasets. (click to expand)</summary>
+<summary>TWLA achieves superior perplexity performance on WikiText2 datasets and superior average accuracy on 7 zero-shot QA datasets. (click to expand)</summary>
 
 <p align="center">
   <img width="100%" src="figs/results.png">
