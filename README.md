@@ -1,6 +1,6 @@
 <div align="center">
 
-# [ICML'26] TWLA: Breaking the Barrier to W1.58A4 Post-Training Quantization for LLMs
+# [ICML'26] TWLA: Achieving Ternary Weights and Low-Bit Activations for LLMs via Post-Training Quantization
 
 [Zhixiong Zhao](https://kishon-zzx.github.io/)\*, Zukang Xu\*, Zhixuan Chen, Xing Hu, Zhe Jiang and Dawei Yang
 
@@ -23,7 +23,7 @@
 ---
 
 > **Abstract:** Large language models (LLMs) exhibit exceptional general language processing capabilities, but their memory and compute costs hinder deployment. Ternarization has emerged as a promising compression technique, offering significant reductions in model size and inference complexity. However, existing methods struggle with heavy-tailed activation distributions and therefore keep activations in high precision, fundamentally limiting end-to-end inference acceleration. 
-To overcome this limitation, we propose **TWLA** (**T**ernarized **W**eights and **L**ow-bit **A**ctivations), a post-training quantization (PTQ) framework that achieves 1.58-bit weight compression and 4-bit activation quantization while maintaining high accuracy. TWLA comprises three components: (1) Euclidean-to-Manifold Asymmetric Ternary Quantizer (E2M-ATQ) minimizes layer-output error under weight ternarization via a two-stage optimization from Euclidean initialization to manifold relocation; (2) Kronecker Orthogonal Tri-Modal Shaping (KOTMS) applies a Kronecker-structured orthogonal rotation to reshape weights into ternary-friendly tri-modal distributions, while the shared rotation statistically suppresses activation outliers; and (3) Inter-Layer Aware Activation Mixed Precision (ILA-AMP) explicitly introduces adjacent-layer second-order interaction costs in bit allocation and jointly optimizes for the layer-wise disparity of activation quantization gains induced by the shared orthogonal transform, preventing cascades triggered by a few weak layers.
+To overcome this limitation, we propose **TWLA**, a post-training quantization (PTQ) framework that achieves 1.58-bit weight compression and 4-bit activation quantization while maintaining high accuracy. TWLA comprises three components: (1) Euclidean-to-Manifold Asymmetric Ternary Quantizer (E2M-ATQ) minimizes layer-output error under weight ternarization via a two-stage optimization from Euclidean initialization to manifold relocation; (2) Kronecker Orthogonal Tri-Modal Shaping (KOTMS) applies a Kronecker-structured orthogonal rotation to reshape weights into ternary-friendly tri-modal distributions, while the shared rotation statistically suppresses activation outliers; and (3) Inter-Layer Aware Activation Mixed Precision (ILA-AMP) explicitly introduces adjacent-layer second-order interaction costs in bit allocation and jointly optimizes for the layer-wise disparity of activation quantization gains induced by the shared orthogonal transform, preventing cascades triggered by a few weak layers.
 Extensive experiments demonstrate that TWLA is a PTQ method that maintains high accuracy under the **W1.58A4** configuration, while delivering significant inference acceleration. The code is available at [TWLA](https://github.com/Kishon-zzx/TWLA).
 
 ![](figs/overview.png)
