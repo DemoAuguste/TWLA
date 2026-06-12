@@ -115,7 +115,15 @@ We use [lm-evaluation-harness](https://github.com/EleutherAI/lm-evaluation-harne
 If you find the code helpful in your research or work, please cite the following paper.
 
 ```
-
+@misc{zhao2026twlaachievingternaryweights,
+      title={TWLA: Achieving Ternary Weights and Low-Bit Activations for LLMs via Post-Training Quantization}, 
+      author={Zhixiong Zhao and Zukang Xu and Zhixuan Chen and Xing Hu and Zhe Jiang and Dawei Yang},
+      year={2026},
+      eprint={2606.13054},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2606.13054}, 
+}
 ```
 
 ## 💡 Acknowledgements
