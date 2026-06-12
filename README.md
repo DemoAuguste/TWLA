@@ -6,7 +6,7 @@
 
 <br>
 
-<a href="" target="_blank">
+<a href="https://arxiv.org/abs/2606.13054" target="_blank">
 <img src="https://img.shields.io/badge/Paper-arXiv-deepgreen" alt="Paper arXiv"></a>
 
 <a href="https://github.com/Kishon-zzx/TWLA" target="_blank">
